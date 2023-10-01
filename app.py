@@ -10,6 +10,23 @@ import webbrowser
 import json
 from datetime import date
 import sqlite3
+import logging
+
+
+# Log to file with timestamp, and console
+logging.basicConfig(
+    filename="debug.log",
+    encoding='utf-8',
+    level=logging.DEBUG,
+    format="%(asctime)s [%(levelname)s] %(message)s"
+    )
+logger = logging.getLogger()
+logger.setLevel(logging.DEBUG)
+console = logging.StreamHandler()
+console.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(levelname)-8s %(message)s')
+console.setFormatter(formatter)
+logging.getLogger().addHandler(console)
 
 load_dotenv()
 WARHORN_CLIENT_ID = os.getenv('WARHORN_CLIENT_ID')
@@ -20,6 +37,75 @@ WARHORN_PASSWORD = os.getenv('WARHORN_PASSWORD')
 BEARER_TOKEN = os.getenv('BEARER_TOKEN')
 
 
+def makeRegQuery(after_cursor=None):
+   query = """
+    query ($slug: String!) {
+      event(slug: $slug) {
+        title
+        url
+        registrations (first:50, after:AFTER) {
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
+          nodes {
+            registrant {
+              id
+              activationState
+              email
+              name
+            }
+          }
+        }
+      }
+    }
+    """.replace("AFTER", '"{}"'.format(after_cursor) if after_cursor else "null")
+   return query
+
+def makeSessionQuery(after_cursor=None):
+  query = """
+  query EventCalendar ($slug: String!, $start: ISO8601DateTime, $end: ISO8601DateTime) {
+    eventSessions(
+      events: [ $slug]
+      startsAfter: $start
+      startsBefore: $end
+      first: 50
+      after: AFTER
+    ) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      nodes {
+        id
+        status
+        startsAt
+        endsAt
+        scenario {
+          name
+          campaign {
+            name
+          }
+        }
+        uuid
+        playerSignups {
+          user {
+            name
+            id
+          
+          }
+        }
+        gmSignups {
+          user {
+            name
+            id
+          }
+        }
+      }
+    }
+  }
+  """.replace("AFTER", '"{}"'.format(after_cursor) if after_cursor else "null")
+  return query
 
 def createTables(conn):
    try:
@@ -74,104 +160,76 @@ def get_access_token(client_id, client_secret, app_client_id, app_client_secret)
         output = response.json()
         return output['access_token']
 
+if __name__ == '__main__':
 
-try: 
-    BEARER_TOKEN
-except NameError:
-    BEARER_TOKEN = get_access_token(WARHORN_EMAIL, WARHORN_PASSWORD, WARHORN_CLIENT_ID, WARHORN_APPLICATION_TOKEN)
-    print("New BEARER:"+ BEARER_TOKEN)
-    print("Save this into your .env file on a new line starting with BEARER_TOKEN= to skip auth in the future")
+  try: 
+      BEARER_TOKEN
+  except NameError:
+      BEARER_TOKEN = get_access_token(WARHORN_EMAIL, WARHORN_PASSWORD, WARHORN_CLIENT_ID, WARHORN_APPLICATION_TOKEN)
+      logger.debug("New BEARER:"+ BEARER_TOKEN)
+      logger.debug("Save this into your .env file on a new line starting with BEARER_TOKEN= to skip auth in the future")
 
-##  PREPARE DB
-file = "db.sqlite3"
-try:
-  conn = sqlite3.connect(file)
-  print("Database Sqlite3.db formed.")
-  createTables(conn)
-except:
-  print("Database Sqlite3.db not formed.")
-
-## PREPARE graphql Client
-headers = { "Authorization": "Bearer "+ BEARER_TOKEN}
-client = GraphqlClient(endpoint="https://warhorn.net/graphql", headers=headers)
-
-## FIRST QUERY
-query = """
-query EventCalendar ($slug: String!, $start: ISO8601DateTime, $end: ISO8601DateTime) {
-  eventSessions(
-    events: [ $slug]
-    startsAfter: $start
-    startsBefore: $end
-  ) {
-    nodes {
-      id
-      status
-      startsAt
-      endsAt
-      scenario {
-        name
-        campaign {
-          name
-        }
-      }
-      uuid
-      playerSignups {
-        user {
-          name
-          id
-        
-        }
-      }
-      gmSignups {
-        user {
-          name
-          id
-        }
-      }
-    }
-  }
-}
-"""
-epoch_year = date.today().year
-year_start = date(epoch_year, 1, 1).isoformat()
-year_end = date(epoch_year, 12, 31).isoformat()
-variables = {"slug": WARHORN_EVENT_SLUG, "start": year_start, "end": year_end}
-data = client.execute(query=query, variables=variables)
-
-### LOOP ND INSERT
-current_slots = data["data"]["eventSessions"]["nodes"]
-for session in current_slots:
-  c = conn.cursor()
-  print("INSERTING "+ session['scenario']['name'] +" into 'sessions' table")
+  ##  PREPARE DB
+  file = "db.sqlite3"
   try:
-    c.execute("INSERT INTO session (id, startsAt, endsAt, name) VALUES (?,?,?,?)", (session['id'], session['startsAt'], session['endsAt'],session['scenario']['name'] ))
-    conn.commit()
-  except Exception as e:
-     print("FAIL")
-     print(e)
-  for player in session['playerSignups']:
-     print("\tINSERTING "+ player['user']['name'] +" as player")
-     c.execute("INSERT INTO reg_to_session (session_id, reg_id, gm) VALUES (?, ?, ?)", (session['id'], player['user']['id'], 0, ))
-  for gm in session['gmSignups']:
-     print("\tINSERTING "+ gm['user']['name'] +" as gm")
-     c.execute("INSERT INTO reg_to_session (session_id, reg_id, gm) VALUES (?, ?, ?)", (session['id'], gm['user']['id'], 1))
-  print("INSERTING "+ session['scenario']['name'] +" into 'sessions' table")
+    conn = sqlite3.connect(file)
+    logger.info("Database Sqlite3.db formed.")
+    createTables(conn)
+  except:
+    logger.error("Database Sqlite3.db not formed.")
+    exit()
 
+  ## PREPARE graphql Client
+  headers = { "Authorization": "Bearer "+ BEARER_TOKEN}
+  client = GraphqlClient(endpoint="https://warhorn.net/graphql", headers=headers)
 
-query = """
-query ($slug: String!) {
-  event(slug: $slug) {
-    title
-    url
-    registrations {
-      nodes {
-        registrant {
-          activationState
-          email
-          name
-        }
-      }
-    }
-  }
-}
-"""
+  ## FIRST QUERY
+
+  epoch_year = date.today().year
+  year_start = date(epoch_year, 1, 1).isoformat()
+  year_end = date(epoch_year, 12, 31).isoformat()
+  variables = {"slug": WARHORN_EVENT_SLUG, "start": year_start, "end": year_end}
+  has_next_page = True
+  after_cursor = None
+  count = 1
+  while has_next_page:
+    logging.info("Fetching Session graphql page: "+ str(count) +" cursor: "+ str(after_cursor))
+    count = count + 1
+    data = client.execute(query=makeSessionQuery(after_cursor), variables=variables)
+    has_next_page = data['data']['eventSessions']['pageInfo']['hasNextPage']
+    after_cursor = data['data']['eventSessions']['pageInfo']['endCursor']
+    ### LOOP ND INSERT
+    current_slots = data["data"]["eventSessions"]["nodes"]
+    for session in current_slots:
+      c = conn.cursor()
+      logging.info("INSERTING "+ session['scenario']['name'] +" into 'sessions' table")
+      try:
+        c.execute("INSERT INTO session (id, startsAt, endsAt, name) VALUES (?,?,?,?)", (session['id'], session['startsAt'], session['endsAt'],session['scenario']['name'] ))
+        conn.commit()
+      except Exception as e:
+        logging.error(e)
+      for player in session['playerSignups']:
+        logging.info("INSERTING "+ player['user']['name'] +" as player in "+ session['scenario']['name'])
+        c.execute("INSERT INTO reg_to_session (session_id, reg_id, gm) VALUES (?, ?, ?)", (session['id'], player['user']['id'], 0, ))
+      for gm in session['gmSignups']:
+        logging.info("INSERTING "+ gm['user']['name'] +" as gm in "+ session['scenario']['name'])
+        c.execute("INSERT INTO reg_to_session (session_id, reg_id, gm) VALUES (?, ?, ?)", (session['id'], gm['user']['id'], 1))
+
+  variables = {"slug": WARHORN_EVENT_SLUG}
+  has_next_page = True
+  after_cursor = None
+  count = 1
+  while has_next_page:
+    logging.info("Fetching Registration graphql page: "+ str(count) +" cursor: "+ str(after_cursor))
+    count = count + 1
+    data = client.execute(query=makeRegQuery(after_cursor), variables=variables)
+    has_next_page = data['data']['event']['registrations']['pageInfo']['hasNextPage']
+    after_cursor = data['data']['event']['registrations']['pageInfo']['endCursor']
+    current_registrations = data["data"]["event"]["registrations"]['nodes']
+    for reg in current_registrations:
+      logging.info("INSERTING "+ reg['registrant']['name'] +" into 'registration' table")
+      try:
+        c.execute("INSERT INTO registration (id, name, email) VALUES (?,?,?)", (reg['registrant']['id'], reg['registrant']['name'], reg['registrant']['email'] ))
+        conn.commit()
+      except Exception as e:
+        logging.error(e)

@@ -161,7 +161,6 @@ def get_access_token(client_id, client_secret, app_client_id, app_client_secret)
         return output['access_token']
 
 if __name__ == '__main__':
-
   try: 
       BEARER_TOKEN
   except NameError:

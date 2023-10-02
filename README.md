@@ -45,3 +45,8 @@ This program is using the Virtual Tabletop name field to hold "Table Number" for
 
 #### Example Output
 
+4x3 prepared for horizontal badge holder:
+
+![2023-10-02_16-35](https://github.com/michael-tracey/the-call/assets/53870997/59c09f53-1a0e-48cb-bee2-db5c1b976af6)
+
+

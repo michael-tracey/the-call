@@ -6,6 +6,8 @@ import datetime
 import pytz
 import sqlite3
 import logging
+import webbrowser
+from jinja2 import Environment, FileSystemLoader
 
 
 # Log to file with timestamp, and console
@@ -23,8 +25,18 @@ formatter = logging.Formatter('%(levelname)-8s %(message)s')
 console.setFormatter(formatter)
 logging.getLogger().addHandler(console)
 load_dotenv()
-LOCAL_TIMEZONE = os.getenv('LOCAL_TIMEZONE')
 
+LOCAL_TIMEZONE = os.getenv('LOCAL_TIMEZONE')
+WARHORN_EVENT_SLUG = os.getenv('WARHORN_EVENT_SLUG')
+
+
+def to_list(x):
+    if x == None:
+        return ()
+    if type(x) != tuple:
+        return x
+    a, b = x
+    return (to_list(a),) + to_list(b)
 
 def create_connection(db_file):
     conn = None
@@ -66,29 +78,72 @@ if __name__ == '__main__':
     conn = create_connection(file)
     cur = conn.cursor()
     try:
-        cur.execute("SELECT * FROM registration ORDER BY name ASC")
+        cur.execute("SELECT id, name, email FROM registration ORDER BY name ASC")
     except sqlite3.Error as e:
         logging.error(e)
         exit()
     registrations = cur.fetchall()
     logging.debug('Total registrations are '+ str(len(registrations)))
+
+
+    environment = Environment(loader=FileSystemLoader("templates/"))
+    header_template = environment.get_template("html_header.txt")
+    content = header_template.render()
+
+    template = environment.get_template("badge.txt")
+
     for reg in registrations:
         logging.debug('Finding sessions for '+ reg[1])
         try:
-            cur.execute("SELECT session.name, session.startsAt, session.endsAt, reg_to_session.gm FROM reg_to_session,session WHERE reg_to_session.session_id = session.id AND reg_to_session.reg_id = '"+ reg[0] +"' ORDER BY startsAt ASC")
+            query = """SELECT 
+                            session.name, 
+                            session.startsAt,
+                            session.endsAt,
+                            reg_to_session.gm,
+                            session.vtt_name,
+                            session.vtt_type,
+                            session.vtt_notes
+                        FROM reg_to_session,session 
+                        WHERE reg_to_session.session_id = session.id 
+                        AND reg_to_session.reg_id = '"""+ reg[0] +"""' 
+                        ORDER BY  startsAt ASC"""
+            cur.execute(query)
         except sqllite3.Error as e:
             logging.error(e)
             exit()
         sessions = cur.fetchall()
         logging.debug(reg[1] +" has "+ str(len(sessions)))
+        if len(sessions) < 1:
+            continue
         count = 0
-   
+        my_sessions = []
         for session in sessions:
             count = count +1
-
             formatedDate = formatTimes(session[1], session[2])
             if session[3]:
                 logging.debug(str(count) +") "+ reg[1] +" is a GM in "+ str(session[0]) +" at "+ formatedDate)
             else:
                 logging.debug(str(count) +") "+ reg[1] +" is a player in "+ str(session[0]) +" at "+ formatedDate)
+            my_sessions.append({
+                'name': session[0], 
+                'gm': session[3],
+                'vtt_name': session[4],
+                'formated_date': formatedDate
+                })
+
+        content = content +  template.render(
+            name = reg[1],
+            email = reg[2],
+            sessions = my_sessions,
+            registration = reg
+        )
+
+    footer_template = environment.get_template("html_footer.txt")
+    content = content + footer_template.render()
+
+    filestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    with open("output/"+ WARHORN_EVENT_SLUG +"-"+ filestamp +".html", "w") as text_file:
+        text_file.write(content)
+
+        
   

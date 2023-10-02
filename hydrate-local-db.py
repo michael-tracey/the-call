@@ -87,6 +87,11 @@ def makeSessionQuery(after_cursor=None):
             name
           }
         }
+        virtualTableTops {
+            name
+            productType
+            notes
+        }
         uuid
         playerSignups {
           user {
@@ -116,6 +121,9 @@ def createTables(conn):
                 startsAt TEXT, 
                 endsAt TEXT, 
                 name TEXT,
+                vtt_name TEXT,
+                vtt_type TEXT,
+                vtt_notes TEXT,
                 PRIMARY KEY (id)
                 )""")
       
@@ -203,7 +211,25 @@ if __name__ == '__main__':
       c = conn.cursor()
       logging.info("INSERTING "+ session['scenario']['name'] +" into 'sessions' table")
       try:
-        c.execute("INSERT INTO session (id, startsAt, endsAt, name) VALUES (?,?,?,?)", (session['id'], session['startsAt'], session['endsAt'],session['scenario']['name'] ))
+        try: 
+           session['virtualTableTops'][0]
+           vtt_name = session['virtualTableTops'][0]['name']
+           vtt_type = session['virtualTableTops'][0]['productType']
+           vtt_notes = session['virtualTableTops'][0]['notes']
+        except:
+           vtt_name = ''
+           vtt_type = ''
+           vtt_notes = ''
+
+        c.execute("INSERT INTO session (id, startsAt, endsAt, name, vtt_name, vtt_type, vtt_notes) VALUES (?,?,?,?,?,?,?)",
+                   (session['id'], 
+                    session['startsAt'], 
+                    session['endsAt'],
+                    session['scenario']['name'],
+                    vtt_name,
+                    vtt_type,
+                    vtt_notes
+                    ))
         conn.commit()
       except Exception as e:
         logging.error(e)
@@ -213,7 +239,7 @@ if __name__ == '__main__':
       for gm in session['gmSignups']:
         logging.info("INSERTING "+ gm['user']['name'] +" as gm in "+ session['scenario']['name'])
         c.execute("INSERT INTO reg_to_session (session_id, reg_id, gm) VALUES (?, ?, ?)", (session['id'], gm['user']['id'], 1))
-
+  ##  GET REGISTRATIONS
   variables = {"slug": WARHORN_EVENT_SLUG}
   has_next_page = True
   after_cursor = None

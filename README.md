@@ -1,7 +1,12 @@
 # the-call
 Heed the call from Warhorn (https://warhorn.net): Pull event data from Warhorn's GraphQL api and create PDF badges for attendees, including their schedule
 
-## hydrate-loal-db.py
+The process is two steps:
+
+* Run `hydrate-local-db.py` to get the data from Warhorn into the local sqlite3 database.  Rerun this to flush the DB and pull a fresh copy.
+* Run `create-badges.py` to create the PDF file for printing badges.
+
+## hydrate-local-db.py
 
 Empties the local db.sqlite3 database and imports new entries from your Warhorn event.  
 
@@ -17,10 +22,7 @@ WARHORN_PASSWORD | Your private user (owner of the event) password
 
 The process will connect your app (the copy of this code) to your warhorn account and let it access your event data instead of having just public warhorn data.  You will get a BEARER_TOKEN for oauth2 from these steps to put in your .env file from these steps.  The next time you run `hydrate-local-db.py` it will use the BEARER_TOKEN to query warhorn via graphql and store the needed event data in a local Sqlite3 database file (`db.sqlite3` in your application directory).  You are now ready to create your badges.
 
-
-
 ## create-badges.py
-
 
 ### Requriements
 

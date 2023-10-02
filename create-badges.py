@@ -6,7 +6,7 @@ import datetime
 import pytz
 import sqlite3
 import logging
-import webbrowser
+import pdfkit
 from jinja2 import Environment, FileSystemLoader
 
 
@@ -141,9 +141,21 @@ if __name__ == '__main__':
     footer_template = environment.get_template("html_footer.txt")
     content = content + footer_template.render()
 
+    # RENDER TO PDF
     filestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    with open("output/"+ WARHORN_EVENT_SLUG +"-"+ filestamp +".html", "w") as text_file:
+    html_file = os.getcwd() +"/output/"+ WARHORN_EVENT_SLUG +"-"+ filestamp +".html"
+    pdf_file = os.getcwd() +"/output/"+ WARHORN_EVENT_SLUG +"-"+ filestamp +".pdf"
+    with open(html_file, "w") as text_file:
         text_file.write(content)
+    options = {
+        'page-height': '3in',
+        'page-width': '4in',
+        'margin-top': '0.1in',
+        'margin-right': '0in',
+        'margin-bottom': '0in',
+        'margin-left': '0in',
+    }
+    pdfkit.from_file(html_file, pdf_file, options=options)
 
         
   

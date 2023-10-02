@@ -1,9 +1,13 @@
 <html>
 <head>
 <style>
+body {
+    background-color: #FFFFFF;
+}
 td, #customers th {
   border: 1px solid #ddd;
   padding: 8px;
+  font-size: 10px
 }
 
 th {
@@ -12,6 +16,11 @@ th {
   text-align: left;
   background-color: #000000;
   color: white;
+}
+
+td {
+    cellpadding: 2px;
+    cellspacing: 0;
 }
 </style>
 </head>

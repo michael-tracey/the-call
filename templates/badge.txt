@@ -1,9 +1,9 @@
 
-	<table width="100%" style="border: 1px solid; border-collapse: collapse;">
+	<table width="100%" cellpadding="2" cellspacing="0" style="border: 1px solid; border-collapse: collapse;">
     <th colspan=3 style="text-align: center">Schedule for {{ name }} ({{ email }})</th>
     <tbody>
         {% for session in sessions %}
-        <tr {{ loop.cycle('style="background-color: #ECECEC"', '') }}>
+        <tr {{ loop.cycle('style="background-color: #CCCCCC"', '') }}>
             <td>{% if session.gm == 1 %} <b>GM:</b>{% endif %} {{ session.name }}</td>
             <td>{{ session.vtt_name }}</td>
             <td>{{ session.formated_date }}</td>
